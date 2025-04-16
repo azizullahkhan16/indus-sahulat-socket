@@ -5,7 +5,7 @@ import "./App.css";
 
 function App() {
   const [isConnected, setIsConnected] = useState(false);
-  const [eventId, setEventId] = useState("");
+  const [eventId, setEventId] = useState("1912435823651590144");
   const [event, setEvent] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [error, setError] = useState(null);
@@ -44,6 +44,40 @@ function App() {
       console.log("Connected: ", frame);
       setIsConnected(true);
       setError(null);
+
+      const subscriptionId = `event-${eventId}`;
+      stompClientRef.current.subscribe(
+        `/user/event/${eventId}`,
+        (message) => {
+          try {
+            const eventData = JSON.parse(message.body);
+            setEvent(eventData);
+            console.log("Received event: ", eventData);
+          } catch (error) {
+            console.error("Failed to parse event: ", error);
+            setError("Error receiving event data");
+          }
+        },
+        { id: subscriptionId }
+      );
+
+      stompClientRef.current.subscribe(
+        `/user/event/live-location/${eventId}`,
+        (message) => {
+          try {
+            const location = JSON.parse(message.body);
+            setEvent((prev) => ({
+              ...prev,
+              liveLocation: location,
+            }));
+            console.log("Received live location: ", location);
+          } catch (error) {
+            console.error("Failed to parse notification: ", error);
+            setError("Error receiving notification");
+          }
+        },
+        { id: `live-location-${eventId}` }
+      );
 
       stompClientRef.current.subscribe(
         `/user/notification/${userId}`,
@@ -105,74 +139,6 @@ function App() {
     connect();
   };
 
-  const joinEvent = (id) => {
-    if (!stompClientRef.current?.active || !isConnected) {
-      console.error("Cannot join event: STOMP client not connected");
-      setError("Please reconnect to join event");
-      reconnect();
-      return;
-    }
-
-    if (!id) {
-      console.error("Invalid eventId");
-      setError("Please enter a valid Event ID");
-      return;
-    }
-
-    const subscriptionId = `event-${id}`;
-    stompClientRef.current.subscribe(
-      `/user/event/${id}`,
-      (message) => {
-        try {
-          const eventData = JSON.parse(message.body);
-          setEvent(eventData);
-          console.log("Received event: ", eventData);
-        } catch (error) {
-          console.error("Failed to parse event: ", error);
-          setError("Error receiving event data");
-        }
-      },
-      { id: subscriptionId }
-    );
-
-    stompClientRef.current.subscribe(
-      `/user/live-location/event/${id}`,
-      (message) => {
-        try {
-          const location = JSON.parse(message.body);
-          setEvent((prev) => ({
-            ...prev,
-            liveLocation: location,
-          }));
-          console.log("Received live location: ", location);
-        } catch (error) {
-          console.error("Failed to parse notification: ", error);
-          setError("Error receiving notification");
-        }
-      },
-      { id: `live-location-${userId}` }
-    );
-
-    stompClientRef.current.publish({
-      destination: `/app/join/event/${id}`,
-      body: JSON.stringify({ eventId: id, userId }),
-    });
-    console.log(`Joined event: ${id}`);
-    setError(null);
-  };
-
-  const handleJoinEvent = (e) => {
-    e.preventDefault();
-    if (eventId && isConnected) {
-      joinEvent(eventId);
-      // setEventId("");
-      setError(null);
-    } else {
-      console.error("Cannot join event: Not connected or invalid eventId");
-      setError("Cannot join: Not connected or invalid Event ID");
-    }
-  };
-
   const handleLocationSubmit = (e) => {
     e.preventDefault();
     if (!stompClientRef.current?.active || !isConnected) {
@@ -198,7 +164,7 @@ function App() {
 
     const location = { latitude: lat, longitude: lon };
     stompClientRef.current.publish({
-      destination: `/app/live-location/event/${eventId}`,
+      destination: `/app/event/live-location/${eventId}`,
       body: JSON.stringify(location),
     });
     console.log(`Sent location update for event ${event.id}: `, location);
@@ -211,27 +177,17 @@ function App() {
   return (
     <div className="App">
       <h1>WebSocket Connection Status</h1>
+      <p>
+        <strong>User ID:</strong> {userId || "N/A"}
+      </p>
+      <p>
+        <strong>Event ID:</strong> {eventId || "N/A"}
+      </p>
       <p>{isConnected ? "Connected" : "Disconnected"}</p>
       {error && <p className="error">{error}</p>}
       <button onClick={reconnect} disabled={isConnected}>
         Reconnect
       </button>
-
-      <div className="join-event">
-        <h2>Join Event</h2>
-        <form onSubmit={handleJoinEvent}>
-          <input
-            type="number"
-            value={eventId}
-            onChange={(e) => setEventId(e.target.value)}
-            placeholder="Enter Event ID"
-            disabled={!isConnected}
-          />
-          <button type="submit" disabled={!isConnected || !eventId}>
-            Join Event
-          </button>
-        </form>
-      </div>
 
       <div className="event-details">
         <h2>Event Details</h2>
