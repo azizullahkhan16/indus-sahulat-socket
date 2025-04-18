@@ -5,8 +5,10 @@ import "./App.css";
 
 function App() {
   const [isConnected, setIsConnected] = useState(false);
-  const [eventId, setEventId] = useState("1912435823651590144");
+  const [eventId, setEventId] = useState("1913238993801539584");
   const [event, setEvent] = useState(null);
+  const [activeIncidents, setActiveIncidents] = useState([]);
+  const [admitRequests, setAdmitRequests] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [error, setError] = useState(null);
   const [latitude, setLatitude] = useState("");
@@ -94,6 +96,38 @@ function App() {
         },
         { id: `notification-${userId}` }
       );
+
+      stompClientRef.current.subscribe(
+        `/topic/ambulance-provider/active-incident/`,
+        (message) => {
+          try {
+            const incidents = JSON.parse(message.body);
+            setActiveIncidents(
+              Array.isArray(incidents) ? incidents : [incidents]
+            );
+            console.log("Received active incidents: ", incidents);
+          } catch (error) {
+            console.error("Failed to parse active incidents: ", error);
+            setError("Error receiving active incidents");
+          }
+        },
+        { id: `active-incidents-${userId}` }
+      );
+
+      stompClientRef.current.subscribe(
+        `/topic/hospital/admit-request/`,
+        (message) => {
+          try {
+            const admitRequest = JSON.parse(message.body);
+            setAdmitRequests((prev) => [...prev, admitRequest]);
+            console.log("Received admit request: ", admitRequest);
+          } catch (error) {
+            console.error("Failed to parse admit request: ", error);
+            setError("Error receiving admit request");
+          }
+        },
+        { id: `admit-request-${userId}` }
+      );
     };
 
     stompClientRef.current.onStompError = (frame) => {
@@ -128,6 +162,8 @@ function App() {
       console.log("Disconnected");
       setIsConnected(false);
       setEvent(null);
+      setActiveIncidents([]);
+      setAdmitRequests([]);
       setNotifications([]);
       setError(null);
       setLocationError(null);
@@ -168,8 +204,6 @@ function App() {
       body: JSON.stringify(location),
     });
     console.log(`Sent location update for event ${event.id}: `, location);
-    // setLatitude("");
-    // setLongitude("");
     setLocationError(null);
     setError(null);
   };
@@ -265,6 +299,103 @@ function App() {
         )}
       </div>
 
+      <div className="active-incidents">
+        <h2>Active Incidents</h2>
+        {activeIncidents.length > 0 ? (
+          <ul className="incident-list">
+            {activeIncidents.map((incident, index) => (
+              <li key={incident.id || index} className="incident-item">
+                <p>
+                  <strong>Incident ID:</strong> {incident.id || "N/A"}
+                </p>
+                <p>
+                  <strong>Status:</strong> {incident.status || "N/A"}
+                </p>
+                <p>
+                  <strong>Patient:</strong>{" "}
+                  {incident.patient
+                    ? `${incident.patient.firstName} ${incident.patient.lastName}`
+                    : "N/A"}
+                </p>
+                <p>
+                  <strong>Pickup Address:</strong>{" "}
+                  {incident.pickupAddress || "N/A"}
+                </p>
+                <p>
+                  <strong>Pickup Location:</strong>{" "}
+                  {incident.pickupLocation
+                    ? `Lat: ${incident.pickupLocation.latitude}, Lon: ${incident.pickupLocation.longitude}`
+                    : "N/A"}
+                </p>
+                <p>
+                  <strong>Created At:</strong>{" "}
+                  {incident.createdAt
+                    ? new Date(incident.createdAt).toLocaleString()
+                    : "N/A"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No active incidents available.</p>
+        )}
+      </div>
+
+      <div className="admit-requests">
+        <h2>Admit Requests</h2>
+        {admitRequests.length > 0 ? (
+          <ul className="admit-request-list">
+            {admitRequests.map((request, index) => (
+              <li
+                key={request.eventHospitalAssignment?.id || index}
+                className="admit-request-item"
+              >
+                <p>
+                  <strong>Event ID:</strong> {request.event?.id || "N/A"}
+                </p>
+                <p>
+                  <strong>Patient:</strong>{" "}
+                  {request.event?.patient
+                    ? `${request.event.patient.firstName} ${request.event.patient.lastName}`
+                    : "N/A"}
+                </p>
+                <p>
+                  <strong>Hospital:</strong>{" "}
+                  {request.eventHospitalAssignment?.hospital?.name || "N/A"}
+                </p>
+                <p>
+                  <strong>Hospital Location:</strong>{" "}
+                  {request.eventHospitalAssignment?.hospital?.address
+                    ? `Lat: ${request.eventHospitalAssignment.hospital.address.latitude}, Lon: ${request.eventHospitalAssignment.hospital.address.longitude}`
+                    : "N/A"}
+                </p>
+                <p>
+                  <strong>Status:</strong>{" "}
+                  {request.eventHospitalAssignment?.status || "N/A"}
+                </p>
+                <p>
+                  <strong>Ambulance:</strong>{" "}
+                  {request.event?.eventAmbulanceAssignment?.ambulanceAssignment
+                    ?.ambulance
+                    ? `${request.event.eventAmbulanceAssignment.ambulanceAssignment.ambulance.make} ${request.event.eventAmbulanceAssignment.ambulanceAssignment.ambulance.model}`
+                    : "N/A"}
+                </p>
+                <p>
+                  <strong>Created At:</strong>{" "}
+                  {request.eventHospitalAssignment?.createdAt
+                    ? new Date(
+                        request.eventHospitalAssignment.createdAt
+                      ).toLocaleString()
+                    : "N/A"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No admit requests received.</p>
+        )}
+      </div>
+
       <div className="notifications">
         <h2>Notifications</h2>
         {notifications.length > 0 ? (
@@ -283,7 +414,6 @@ function App() {
                   <strong>Receiver Type:</strong>{" "}
                   {notification.receiverType || "N/A"}
                 </p>
-
                 <p>
                   <strong>Time:</strong>{" "}
                   {notification.timestamp
