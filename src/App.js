@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, use } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import "./App.css";
 
 function App() {
   const [isConnected, setIsConnected] = useState(false);
-  const [eventId, setEventId] = useState("1913238993801539584");
+  const [eventId, setEventId] = useState("1916571458916130816");
   const [event, setEvent] = useState(null);
+  const [ambulanceAssignment, setAmbulanceAssignment] = useState(null);
   const [activeIncidents, setActiveIncidents] = useState([]);
   const [admitRequests, setAdmitRequests] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -14,7 +15,7 @@ function App() {
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [locationError, setLocationError] = useState(null);
-  const [userId] = useState("1912177586428452864"); // Matches JWT sub and patient.phone
+  const [userId] = useState("1917234530292834304"); // Matches JWT sub and patient.phone
   const stompClientRef = useRef(null);
   const notificationsEndRef = useRef(null);
   const token =
@@ -127,6 +128,24 @@ function App() {
           }
         },
         { id: `admit-request-${userId}` }
+      );
+
+      stompClientRef.current.subscribe(
+        `/user/assignment/${userId}`,
+        (message) => {
+          try {
+            const ambulanceAssignmentPayload = JSON.parse(message.body);
+            setAmbulanceAssignment(ambulanceAssignmentPayload);
+            console.log(
+              "Received ambulance assignment: ",
+              ambulanceAssignmentPayload
+            );
+          } catch (error) {
+            console.error("Failed to parse ambulance assignment: ", error);
+            setError("Error receiving ambulance assignment");
+          }
+        },
+        { id: `ambulane-assignment-${userId}` }
       );
     };
 
