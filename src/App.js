@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, use } from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import "./App.css";
+import axios from "axios";
 
 function App() {
   const [isConnected, setIsConnected] = useState(false);
-  const [eventId, setEventId] = useState("1916571458916130816");
+  const [eventId, setEventId] = useState("1920036872947433472");
   const [event, setEvent] = useState(null);
   const [ambulanceAssignment, setAmbulanceAssignment] = useState(null);
   const [activeIncidents, setActiveIncidents] = useState([]);
@@ -15,7 +16,10 @@ function App() {
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [locationError, setLocationError] = useState(null);
-  const [userId] = useState("1917234530292834304"); // Matches JWT sub and patient.phone
+  const [userId] = useState("1919649396290203648");
+  const [chatroomId] = useState("1920036872976793600");
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
   const stompClientRef = useRef(null);
   const notificationsEndRef = useRef(null);
   const token =
@@ -80,6 +84,21 @@ function App() {
           }
         },
         { id: `live-location-${eventId}` }
+      );
+
+      stompClientRef.current.subscribe(
+        `/topic/event/chatroom/${chatroomId}`,
+        (message) => {
+          try {
+            const newMesasge = JSON.parse(message.body);
+            setMessages((prev) => [...prev, newMesasge]);
+            console.log("Received chat message: ", newMesasge);
+          } catch (error) {
+            console.error("Failed to parse chat message: ", error);
+            setError("Error receiving chat message");
+          }
+        },
+        { id: `chatroom-${chatroomId}` }
       );
 
       stompClientRef.current.subscribe(
@@ -227,6 +246,50 @@ function App() {
     setError(null);
   };
 
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    try {
+      if (!newMessage.trim()) return;
+
+      const response = await axios.post(
+        `${process.env.REACT_APP_BASE_URL}/chat/add-message/${chatroomId}`,
+        {
+          message: newMessage.trim(),
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.status === 200) {
+        console.log("Message sent successfully: ", response.data);
+      }
+      setError(null);
+      setNewMessage("");
+    } catch (error) {
+      console.error("Failed to send message: ", error);
+      setError("Error sending message");
+    }
+
+    const chatMessage = {
+      senderId: userId,
+      chatroomId,
+      content: newMessage.trim(),
+      timestamp: new Date().toISOString(),
+    };
+
+    stompClientRef.current.publish({
+      destination: `/app/event/chatroom/${chatroomId}`,
+      body: JSON.stringify(chatMessage),
+    });
+
+    setMessages((prev) => [...prev, chatMessage]); // optional: optimistic UI update
+    setNewMessage("");
+  };
+
   return (
     <div className="App">
       <h1>WebSocket Connection Status</h1>
@@ -241,6 +304,42 @@ function App() {
       <button onClick={reconnect} disabled={isConnected}>
         Reconnect
       </button>
+
+      <div className="chat-container">
+        <h2>Chat Room</h2>
+
+        <div className="messages-list">
+          {messages.map((msg, index) => (
+            <div key={index} className="message-item">
+              <strong>
+                {msg.senderId === userId ? "You" : msg.senderType}
+              </strong>
+              :{" "}
+              <strong>
+                {msg.senderId === userId
+                  ? "You"
+                  : msg.sender.firstName + " " + msg.sender.lastName}
+              </strong>
+              : {msg.message}
+              <div className="timestamp">
+                {msg.createdAt
+                  ? new Date(msg.createdAt).toLocaleTimeString()
+                  : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <form onSubmit={sendMessage} className="chat-form">
+          <input
+            type="text"
+            placeholder="Type your message..."
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+          />
+          <button type="submit">Send</button>
+        </form>
+      </div>
 
       <div className="event-details">
         <h2>Event Details</h2>

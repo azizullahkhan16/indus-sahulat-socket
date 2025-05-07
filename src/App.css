@@ -72,3 +72,36 @@ button:disabled {
 .notification-item:last-child {
   border-bottom: none;
 }
+
+.chat-container {
+  border-top: 1px solid #ccc;
+  margin-top: 20px;
+  padding-top: 10px;
+}
+
+.messages-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  border: 1px solid #eee;
+  padding: 10px;
+  background: #f9f9f9;
+}
+
+.message-item {
+  margin-bottom: 6px;
+}
+
+.chat-form {
+  display: flex;
+  gap: 10px;
+}
+
+.chat-form input {
+  flex: 1;
+  padding: 8px;
+}
+
+.chat-form button {
+  padding: 8px 12px;
+}
